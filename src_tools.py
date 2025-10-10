@@ -197,9 +197,10 @@ class Tools:
     plotBackCol = (0,0,0)
     plotCol = (240,20,20)
     plotSecondCol = (0,240,0)
-    mountainHeight = 0.85
-    snowCapHeight = 0.91
-    mundaneProfessions = ["roadbuilders"]
+    mountainHeight = 0.84
+    snowCapHeight = 0.92
+    baseStandardOfLiving = {"food":1,"work":1,"luxuries":1,"health":1,"freedoms":1}
+    mundaneProfessions = ["roadbuilder"]
     technologies = {}
     technologies["weaponry"] = 1
     technologies["defense"] = 1
@@ -285,8 +286,8 @@ def techTier(lv):
     
 
 def skillTier(skill):
-    tier = math.floor(skill*10)
-    tiersList = ["poor","poor","fair","fair","fair","skillful","skillful","skillful","masterful","legendary","legendary"]
+    tier = math.floor((skill+0.01)*10)
+    tiersList = ["poor","fair","fair","competent","competent","skillful","skillful","exceptional","exceptional","masterful","legendary"]
     return tiersList[tier]
 
 def synonym(x,seed=0,exclusive=0):
@@ -320,7 +321,7 @@ def synonym(x,seed=0,exclusive=0):
     s["fertility"] = ["fertility","plenty","abundance","virility","birth"]
     s["elevation"] = ["elevation","heights","mountains","cliffs"]
     s["darkness"] = ["darkness","night","twilight","dusk"]
-    s["death"] = ["death","mortality","murder","the afterlife","killing"]
+    s["death"] = ["death","mortality","the afterlife","execution"]
     s["ice"] = ["ice","snow","frost","cold"]
     s["frost"] = ["frost","permafrost","ice","glaciers","icebergs","snow"]
     s["greed"] = ["greed","wealth","gold","riches","treasure"]
@@ -346,8 +347,10 @@ def synonym(x,seed=0,exclusive=0):
     s["helmet"] = ["helmet","helm","crown","circlet","coif","headdress","coronet","diadem","sallet","bascinet","burgonet"]
     s["bodice"] = ["bodice","breastplate","hauberk","mail","brigandine","lamellar","platemail","cuirass","coat","vest"]
     s["shield"] = ["shield","buckler","kite shield","tower shield","targe","pavise","roundshield","greatshield","small shield"]
-    s["tool"] = ["tool","hammer","drill","saw","chisel","sextant","wrench","hatchet","axe","cane","brush","shovel","pickaxe"]
+    s["tool"] = ["tool","hammer","drill","saw","chisel","sextant","wrench","hatchet","axe","cane","brush","shovel","pickaxe","scalpel"]
     s["accessory"] = ["accessory","necklace","pendant","ring","earring","brooch","medal","monocle","chain","rosary","charm"]
+    s["wooden instrument"] = ["wooden instrument","lute","harp","guitar","clarinet","drum","flute","war horn","violin","cello","piano"]
+    s["metal instrument"] = ["metal instrument","horn","flute","drum","war horn","xylophone","bell","gong","bugle"]
     s["paper"] = ["paper","parchment","vellum","slate","papyrus","bamboo","eelskin","rawhide","sandstone"]
     s["wood"] = ["wood","oak","maple","mahogany","pine","birch","hickory","fir","ash","teak","olive","cork","balsa","pecan"]
     s["stone"] = ["stone","granite","basalt","obsidian","limestone","sandstone","slate","marble","gneiss"]
@@ -360,23 +363,23 @@ def synonym(x,seed=0,exclusive=0):
     s["metallurgy"] = ["minerals","mountains","metals","forging","smithing","smelting","industry","manufacturing","labor"]
     s["government"] = ["government","bureaucracy","administration","authority","states","the state"]
     s["transportation"] = ["transportation","sailing","travel","rail","roads","infrastructure","roadbuilding"]
-    s["research"] = ["research","science","experiments","physics","mathematics","language","study"]
+    s["research"] = ["research","science","experiments","physics","mathematics","language","study","education"]
     s["art"] = ["art","painting","sculpting","singing","music","beauty","drawing"]
     s["philosophy"] = ["philosophy","metaphysics","thought","ontology","epistemology","existentialism","knowledge","ethics"]
     s["medicine"] = ["medicine","anatomy","pharmaceuticals","surgery","illness","disease","pathogens","health"]
     s["artillery"] = ["artillery","howitzers","catapults","trebuchets","ballistas","cannons"]
-    s["assault infantry"] = ["assault infantry","warriors","troopers","soldiers","infantrymen","fighters","brigade"]
-    s["mechanized"] = ["mechanized","tanks","armored","engineers"]
-    s["cavalry"] = ["cavalry","horseback riders","mounted","lancers","cuirassiers","horseback brigade","dragoons","hussars"]
-    s["guard infantry"] = ["guard infantry","garrison","sentinels","defensive brigade","guardsmen","reserve"]
-    s["ranged infantry"] = ["ranged infantry","riflemen","longbowmen","slingers","rifle brigade","carabiniers"]
-    s["siege"] = ["siege","siege towers","battering rams","demolitionists","blockades","sappers"]
+    s["assault infantry"] = ["assault infantry","warriors","troopers","soldiers","infantrymen","fighters","brigade","division","regiment","battalion"]
+    s["mechanized"] = ["mechanized","tanks","armored","engineers","mechanized division","mechanized regiment"]
+    s["cavalry"] = ["cavalry","horseback riders","mounted","lancers","cuirassiers","horseback brigade","dragoons","hussars","cavalry regiment","cavalry division"]
+    s["guard infantry"] = ["guard infantry","garrison","sentinels","defensive brigade","guardsmen","reserve","garrison regiment","garrison division","guard division","guard regiment","reserve division","reserve regiment"]
+    s["ranged infantry"] = ["ranged infantry","riflemen","longbowmen","slingers","rifle brigade","carabiniers","rifle regiment","marksmen regiment","marksmen division","rifle division"]
+    s["siege"] = ["siege","siege towers","battering rams","demolitionists","blockades","sappers","siege division","siege regiment"]
     s["navy"] = ["navy","fleet","naval wing","naval detachment","flotilla","naval battle group","sailors","seamen"]
     s["about"] = ["about","dealing with","related to","explaining","questioning",
      "investigating","on","concerning","relating to","challenging","exploring","pondering"]
     s["water"] = ["water","moisture","rain","rainfall","irrigation","humidity"]
     s["magic"] = ["magic","witchcraft","wizardry","miracles","sorcery","alchemy","divination","voodoo","thaumaturgy"]
-    s["church"] = ["church","cathedral","parish","chapel","temple","mosque","basilica","shrine","sanctuary","abbey"]
+    s["church"] = ["church","cathedral","chapel","temple","mosque","basilica","shrine","sanctuary","abbey"]
     s["cathedral"] = ["cathedral","basilica","grand mosque","archbasilica","grand cathedral","shrine","abbey"]
     s["palace"] = ["palace","castle","citadel","keep","throne","court"]
     s["parliament"] = ["parliament","congress","capital","legislature","assembly","senate","citadel","house"]
@@ -396,8 +399,9 @@ def synonym(x,seed=0,exclusive=0):
     s["state"] = ["state","government","the state"]
     s["culture"] = ["culture","the arts"]
     s["trade"] = ["trade","economy","exchange","finance"]
-    s["party"] = ["party","league","organization","advocates","followers","guild","congress","caucus","fraternity","syndicate","conference","association","center"]
-    s["cult"] = ["cult","church","clergy","worshippers","followers","priests","disciples","apostles","devotees","prophets","evangelists"]
+    s["party"] = ["party","league","organization","advocates","followers","guild","congress","caucus","fraternity","syndicate","conference","association","center","defenders"]
+    s["cult"] = ["cult","church","clergy","worshippers","followers","priests","disciples","apostles","devotees","prophets","evangelists","knights","crusaders"]
+    s["company"] = ["company","& co","& associates","family","merchants","mercantile","cooperative","operations","shipping","products","investments"]
     s["latitude"] = ["latitude","arctic","tropics"]
     s["diplomacy"] = ["diplomacy","foreign affairs","foreign policy","international relations","foreign relations"]
     s["constellations"] = ["constellations","astrology","astronomy","stars"]

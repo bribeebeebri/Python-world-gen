@@ -242,7 +242,7 @@ class Town:
             self.radius = 0
         self.lakeRadius = 0
         if self.node.lake > 0:
-            self.lakeRadius = (self.xDim/24)*self.node.lake
+            self.lakeRadius = (self.xDim/30)*self.node.lake
             if self.radius > 0:
                 self.radius *= 1.4
         cnt = 1024
@@ -338,8 +338,24 @@ class Town:
                     b.type == "water"):
                     f.col = self.waterColor
         if self.lakeRadius > 0:
+            lakeAngle = int(self.node.name) % 360
+            lakeAngle = lakeAngle*0.0174533
+            lakeRatio = int(self.node.name) % 8
+            lakeRatio *= 0.1
+            lakeComplementaryRatio = 1-lakeRatio
             for f in self.blocks:
-                if f.blockDist(self.x,self.y) < self.lakeRadius:
+                blockAngle = math.atan2(f.y-(self.yDim/2),f.x-(self.xDim/2))
+                if blockAngle < 0:
+                    blockAngle += math.pi*2
+                angleDiff = abs(lakeAngle-blockAngle)
+                if angleDiff > math.pi:
+                    angleDiff = (math.pi*2)-angleDiff
+                if angleDiff > math.pi/2:
+                    angleDiff = math.pi-angleDiff
+                modifiedLakeRadius = self.lakeRadius*(0.3+(angleDiff/(math.pi/3)))
+                modifiedLakeRadius = (modifiedLakeRadius*lakeComplementaryRatio)+(self.lakeRadius*lakeRatio)
+                modifiedLakeRadius = max(modifiedLakeRadius,self.lakeRadius*0.7)
+                if f.blockDist(self.x,self.y) < modifiedLakeRadius:
                     f.col = self.waterColor
         if self.node.watery() == 1:
             for f in self.blocks:
@@ -512,9 +528,9 @@ class Town:
         if self.node.city == None and nodeStructure != None:
             if nodeStructure in ["farm","mill"]:
                 self.addFarm(drawer,roadCenter)
-            if nodeStructure == "fort":
+            elif nodeStructure == "fort":
                 self.addFort(drawer)
-            if nodeStructure in ["inn","brothel","workshop","mine","fishery","port"]:
+            else:
                 self.addBuilding(drawer,roadCenter)
         scl = 1/BORDERSCALE
         h = self.yDim/scl

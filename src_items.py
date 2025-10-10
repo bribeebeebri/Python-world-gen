@@ -83,20 +83,23 @@ class Item:
         self.gender = 0
         self.creationEvent = None
         self.destructionEvent = None
+        self.dead = 0
         self.condition = 1
         self.field = f
         self.subject = s
         self.importance = i
         self.location = None
+        self.formerLocation = None
         self.move(self.culture.origin)
         self.creator = cr
         self.owner = None
+        self.formerOwner = None
         if self.creator != None:
             self.creator.takeItem(self)
         self.subkind = None
-        self.decoration = None
-        self.quality = random.uniform(0.1,0.25)
-        self.quality = clamp(self.quality+(self.creator.skill*random.uniform(0.75,1)),0.05,1)
+        self.decorations = []
+        self.quality = random.uniform(0.01,0.33)
+        self.quality = clamp(self.quality+(self.creator.skill*random.uniform(0.7,1.05)),0.02,1)
         self.importance = self.importance*(1+(self.quality/2))
         if self.kind == "piece":
             self.subkind = synonym("piece")
@@ -181,9 +184,9 @@ class Item:
                         n = synonym(self.field)
                         if roll2 < 0.07:
                             n += " " + self.culture.language.genName()
-            if self.kind in ["weapon","helmet","bodice","shield","tool","accessory"]:
+            if self.kind in ["weapon","helmet","bodice","shield","tool","accessory","wooden instrument","metal instrument"]:
                 roll = random.random()
-                if self.kind in ["tool","weapon","accessory"]:
+                if self.kind in ["tool","weapon","accessory","wooden instrument","metal instrument"]:
                     self.subkind = synonym(self.kind,exclusive=1)
                 else:
                     self.subkind = synonym(self.kind)
@@ -210,23 +213,37 @@ class Item:
                 self.location.items.remove(self)
         self.location = loc
         loc.items.append(self)
+    def repair(self,amount):
+        self.condition = clamp(self.condition + amount,0,1)
     def damage(self,amount,actors=[]):
         self.condition = clamp(self.condition - amount,0,1)
         if self.condition <= 0:
-            e = Event(m=self.culture.myMap,a=-1,kind="destruction",sub=self,actrs=actors,loc=self.location)
-            self.destructionEvent = e
-            if self.location != None:
-                self.location.items.remove(self)
-            self.location = None
-            if self.owner != None:
-                self.owner.inventory.remove(self)
-            self.owner = None
+            self.destroy()
+    def destroy(self):
+        self.formerOwner = self.owner
+        self.formerLocation = self.location
+        e = Event(m=self.culture.myMap,a=-1,kind="destruction",sub=self,actrs=actors,loc=self.location)
+        self.destructionEvent = e
+        if self.location != None:
+            self.location.items.remove(self)
+        self.location = None
+        if self.owner != None:
+            self.owner.inventory.remove(self)
+        self.owner = None
+        self.dead = 1
+    def restore(self):
+        self.condition = 1
+        self.dead = 0
+        if self.formerOwner != None and self.formerOwner.dead == 0:
+            self.formerOwner.takeItem(self)
+        elif self.formerLocation != None:
+            self.move(self.formerLocation)
     def getLeadershipMultiplier(self):
-        if self.kind not in ["weapon","helmet","bodice","shield","tool","accessory"]:
+        if self.kind not in ["weapon","helmet","bodice","shield","tool","accessory","wooden instrument","metal instrument"]:
             return 1
         multiplier = clamp(math.log10(self.importance/2),1.1,2)-1
         multiplier = multiplier*(1+(self.quality/2))
-        if self.kind in ["tool","bodice","accessory"]:
+        if self.kind in ["tool","bodice","accessory","wooden instrument","metal instrument"]:
             multiplier *= 0.6
         if self.kind in ["helmet","shield"]:
             multiplier *= 0.8
@@ -393,7 +410,7 @@ class Item:
             s = s + "n " + self.subkind if self.subkind[0].lower() in vowels else s + " " + self.subkind
         else:
             s = s + "n " + self.kind if self.kind[0].lower() in vowels else s + " " + self.kind
-        if self.kind in ["weapon","helmet","bodice","shield","tool","accessory"]:
+        if self.kind in ["weapon","helmet","bodice","shield","tool","accessory","wooden instrument","metal instrument"]:
             s += " created by the " + self.creator.nameFull()
         else:
             s += " by the " + self.creator.nameFull()
@@ -409,16 +426,21 @@ class Item:
         elif self.subkind in ["sculpture","statue","bust","etching"]:
             self.material = synonym("stone",seedNum(self.name))
             s += "It is made of " + self.material
-        elif self.subkind in ["woodcut","longbow","shortbow","crossbow"] or self.kind in ["shield"]:
-            self.material = synonym("wood",seedNum(self.name))
+        elif self.subkind in ["woodcut","longbow","shortbow","crossbow"] or self.kind in ["shield","wooden instrument"]:
+            self.material = synonym("wood",seedNum(self.name),exclusive=1)
             s += "It is made of " + self.material
-        elif self.kind in ["weapon","helmet","bodice","tool","accessory"]:
-            self.material = synonym("metal",seed=seedNum(self.name))
+        elif self.kind in ["weapon","helmet","bodice","tool","accessory","metal instrument"]:
+            self.material = synonym("metal",seed=seedNum(self.name),exclusive=1)
             s += "It is made of " + self.material
         else:
             s += "It is made of mixed materials"
-        if self.decoration != None:
-            s += " and decorated with " + self.decoration
+        if self.decorations != []:
+            s += " and decorated with"
+            for dec in self.decorations:
+                s += " "
+                if dec != self.decorations[0]:
+                    s += "and "
+                s += dec.decorationDescription()
         s += ".\n"
         if self.kind in ["story"]:
             s += "It is fiction "
@@ -438,6 +460,8 @@ class Item:
             s += "It is a tool "
         elif self.kind == "accessory":
             s += "It is an accessory "
+        elif self.kind in ["metal instrument","wooden instrument"]:
+            s += "It is an instrument "
         else:
             s += "It is an object "
         if self.field != None:
@@ -449,14 +473,17 @@ class Item:
             s += ".\n"
         if self.subject != None:
             q = "work"
-            if self.kind in ["helmet","weapon","bodice","shield"]:
+            if self.kind in ["helmet","weapon","bodice","shield","accessory","tool","wooden instrument","metal instrument"]:
                 q = synonym("detail",seed=seedNum(self.name))
             connector = "the "
             if self.subject.tt == "event":
                 connector = ""
-            try:
-                s += "The subject of the " + q + " is " + self.subject.culture.name + " " + self.subject.nameFull() + ".\n"
-            except AttributeError: 
+            if (self.subject.tt not in ["node"] or self.subject.city == None) and (self.subject.tt not in "pop" or self.subject.kind not in ["army","fleet"]):
+                try:
+                    s += "The subject of the " + q + " is the " + self.subject.culture.name + " " + self.subject.nameFull() + ".\n"
+                except AttributeError: 
+                    s += "The subject of the " + q + " is " + self.subject.nameFull() + ".\n"
+            else:
                 s += "The subject of the " + q + " is " + self.subject.nameFull() + ".\n"
         s += "The "
         if (self.kind in ["story","book","play","poem"]):
@@ -480,6 +507,6 @@ class Item:
         else:
             s += "legendary"
         s += ".\n"
-        if self.condition == 0:
+        if self.condition == 0 or self.dead == 1:
             s += "It is destroyed."
         return s
