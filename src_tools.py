@@ -218,6 +218,7 @@ class Tools:
 class CombatTools:
     endWarDistance = 1400
     militaryAge = 17
+    militaryProfessions = ["tactician","assassin"]
     warlikeSocieties = ["Privateers","Military dictatorship"]
     aggressiveSocieties = ["Imperium","Empire","Hegemony","Monarchy",
                                     "Religious zealots","Revolutionary commune",
@@ -317,7 +318,7 @@ def synonym(x,seed=0,exclusive=0):
     s["plantlife"] = ["plantlife","plants","vegetation","flora"]
     s["vegetation"] = ["plantlife","plants","vegetation","flora"]
     s["fields"] = ["fields","farms","pastures","prairies","farmland"]
-    s["metallicity"] = ["metallicity","metals","ore","prospecting","smelting"]
+    s["metallicity"] = ["metallicity","metals","ore","prospecting","smelting","metalwork"]
     s["fertility"] = ["fertility","plenty","abundance","virility","birth"]
     s["elevation"] = ["elevation","heights","mountains","cliffs"]
     s["darkness"] = ["darkness","night","twilight","dusk"]
@@ -360,9 +361,9 @@ def synonym(x,seed=0,exclusive=0):
     s["defense"] = ["defense","combat","armor","war","battle","fortification"]
     s["production"] = ["production","industry","manufacturing","labor"]
     s["mining"] = ["mining","minerals","mountains","metal","forging","excavation"]
-    s["metallurgy"] = ["minerals","mountains","metals","forging","smithing","smelting","industry","manufacturing","labor"]
+    s["metallurgy"] = ["minerals","mountains","metals","forging","smithing","smelting","industry","manufacturing","labor","metalwork"]
     s["government"] = ["government","bureaucracy","administration","authority","states","the state"]
-    s["transportation"] = ["transportation","sailing","travel","rail","roads","infrastructure","roadbuilding"]
+    s["transportation"] = ["transportation","travel","infrastructure","roadbuilding"]
     s["research"] = ["research","science","experiments","physics","mathematics","language","study","education"]
     s["art"] = ["art","painting","sculpting","singing","music","beauty","drawing"]
     s["philosophy"] = ["philosophy","metaphysics","thought","ontology","epistemology","existentialism","knowledge","ethics"]
@@ -401,7 +402,7 @@ def synonym(x,seed=0,exclusive=0):
     s["trade"] = ["trade","economy","exchange","finance"]
     s["party"] = ["party","league","organization","advocates","followers","guild","congress","caucus","fraternity","syndicate","conference","association","center","defenders"]
     s["cult"] = ["cult","church","clergy","worshippers","followers","priests","disciples","apostles","devotees","prophets","evangelists","knights","crusaders"]
-    s["company"] = ["company","& co","& associates","family","merchants","mercantile","cooperative","operations","shipping","products","investments"]
+    s["company"] = ["company","& co","& associates","& sons","family","merchants","mercantile","cooperative","operations","shipping","products","investments"]
     s["latitude"] = ["latitude","arctic","tropics"]
     s["diplomacy"] = ["diplomacy","foreign affairs","foreign policy","international relations","foreign relations"]
     s["constellations"] = ["constellations","astrology","astronomy","stars"]
@@ -409,6 +410,7 @@ def synonym(x,seed=0,exclusive=0):
     s["peak"] = ["peak","mountain","summit","ridge","cliff","massif"]
     s["hill"] = ["hill","bluff","cliff","ridge","knoll","hillock"]
     s["pond"] = ["pond","lake","reservoir","lagoon"]
+    s["governor"] = ["governor","mayor","overseer","chancellor","councilman","administrator","commissioner"]
     syn = x
     if x in s.keys():
         ch = random.randint(0,len(s[x])-1)

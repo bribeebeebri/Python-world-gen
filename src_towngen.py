@@ -370,6 +370,25 @@ class Town:
             if f.col == self.waterColor:
                 f.type = "water"
         self.avgColors(6)
+    def nearestNeighborNode(self,xx,yy):
+        neighborPt = self.nearestNeighborPt(xx,yy)
+        if neighborPt.node != None:
+            return neighborPt.node
+        return self.node
+    def nearestNeighborPt(self,xx,yy):
+        dist = 10000
+        chosenNeighbor = self.neighborPts[0]
+        for n in self.neighborPts:
+            neighborDist = n.dist(xx,yy)
+            if neighborDist < dist:
+                dist = neighborDist
+                chosenNeighbor = n
+        return chosenNeighbor
+    def isOutsideArea(self,xx,yy):
+        buffer = BORDERSCALE*self.xDim
+        if xx <= buffer or xx >= self.xDim-buffer or yy <= buffer or yy >= self.yDim-buffer:
+            return True
+        return False
     def nearestBlock(self,xx,yy):
         d = 100000
         a = self.blocks[0]
@@ -502,7 +521,7 @@ class Town:
                                         if blockNeighbor.blockDist(neighbor.x,neighbor.y) < chosenDist:
                                             chosenBlock = blockNeighbor
                                             chosenDist = chosenBlock.blockDist(neighbor.x,neighbor.y)
-                                drawCircle(drawer,currentBlock.x,currentBlock.y,self.roadRadius,dCol)
+                                drawCircle(drawer,currentBlock.x,currentBlock.y,self.roadRadius*0.7,dCol)
                                 drawer.line([(currentBlock.x,currentBlock.y),(chosenBlock.x,chosenBlock.y)],dCol,math.floor(self.roadRadius*2))
                                 currentBlock = chosenBlock
                                 roadedBlocks.append(currentBlock)
