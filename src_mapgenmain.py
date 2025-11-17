@@ -65,20 +65,21 @@ def strDivider(length):
     return n
             
 from scipy.spatial import Voronoi
-def relaxLloyd(pts,strength):
+def relaxLloyd(pts,strength,xDim,margin):
     for i in range(strength):
         vor = Voronoi(pts)
         newpts = []
         for idx in range(len(vor.points)):
             pt = vor.points[idx,:]
             region = vor.regions[vor.point_region[idx]]
-            if -1 in region:
+            if -1 in region or pt[0] < margin or pt[1] < margin or pt[0] > xDim-margin or pt[1] > xDim-margin:
                 newpts.append(pt)
             else:
                 vxs = np.asarray([vor.vertices[i,:] for i in region])
                 newpt = centroidnp(vxs)
                 newpts.append(newpt)
         pts = np.array(newpts) 
+    return pts
     
 class Node:
     def __init__(self,xx,yy,m=None):
@@ -99,6 +100,7 @@ class Node:
         self.resourceRegion = None
         self.resourceDist = 0
         self.key = 0
+        self.tributaries = {}
         self.linkedRoads = []
         self.roads = []
         self.entities = []
@@ -114,6 +116,7 @@ class Node:
         self.tempDistance = 100000
         self.simulatedWater = 0
         self.totalSimulatedWater = 0
+        self.tributaryDepth = -1
     def coords(self):
         tupleVert = (self.x,self.y)
         return tupleVert
@@ -145,6 +148,20 @@ class Node:
         for n in self.neighbors:
             self.neighbors.remove(n)
             n.neighbors.remove(self)
+    def attribute(self,n,amount):
+        if n in self.tributaries.keys():
+            self.tributaries[n] = self.tributaries[n]+amount
+        else:
+            self.tributaries[n] = amount
+    def getTributaryDepth(self):
+        if self.tributaryDepth != -1:
+            return self.tributaryDepth
+        if self.tributaries == {}:
+            self.tributaryDepth = 0
+        else:
+            tributaryDepths = [a.getTributaryDepth() for a in self.tributaries.keys()]
+            self.tributaryDepth = max(tributaryDepths)+1
+        return self.tributaryDepth
     def linkRoads(self,newNeighbor):
         if newNeighbor not in self.neighbors:
             return 0
@@ -245,6 +262,8 @@ class Node:
                 n = p
         return n
     def getLowestOfNeighbors(self):
+        if self.neighbors == []:
+            return self
         lowestOfNeighbors = min(self.neighbors,key=lambda x:x.elevation)
         return lowestOfNeighbors
     def getLowestOfNeighborsAndSelf(self):
@@ -262,6 +281,8 @@ class Node:
         lowestOfNeighbors = min(possibleChoices,key=lambda x:x.elevation)
         return lowestOfNeighbors
     def getHighestOfNeighbors(self):
+        if self.neighbors == []:
+            return self
         highestOfNeighbors = max(self.neighbors,key=lambda x:x.elevation)
         return highestOfNeighbors
     def getHighestOfNeighborsAndSelf(self):
@@ -296,10 +317,14 @@ class Node:
         return neighbors
     def getLowestSecondNeighbor(self):
         possibleChoices = self.getSecondNeighbors()
+        if possibleChoices == []:
+            return self
         lowestOfNeighbors = min(possibleChoices,key=lambda x:x.elevation)
         return lowestOfNeighbors
     def getLowestNthNeighbor(self,n):
         possibleChoices = self.getNthNeighbors(n)
+        if possibleChoices == []:
+            return self
         lowestOfNeighbors = min(possibleChoices,key=lambda x:x.elevation)
         return lowestOfNeighbors
     def nodesUntilDownhillFlow(self):
@@ -347,6 +372,8 @@ class Node:
             for n in currentNodes:
                 for i in n.neighbors:
                     if i.elevation < cutoffElevation:
+                        if i not in createdLake.nodes:
+                            i.simulatedWater += random.uniform(0.2,0.5)
                         createdLake.addNode(i)
             tries += 1
     def getSlope(self):
@@ -399,7 +426,7 @@ class Node:
             self.waterdistance = 1
         else:
             dd = [n.waterdistance for n in self.neighbors]
-            self.waterdistance = min(dd) + 1 + (random.random()*0.4) + clamp(self.slope*100,0,1)
+            self.waterdistance = min(dd) + 1
         if self.x < 0 or self.y < 0 or self.x > 960 or self.y > 960:
             self.waterdistance = 1000
     def smooth(self):
@@ -431,7 +458,7 @@ class Node:
         elif self.temp < 0.18:
             if self.rainfall < 0.28:
                 self.biome = "frost"
-            elif self.rainfall < 0.36:
+            elif self.rainfall < 0.41:
                 self.biome = "tundra"
             else:
                 self.biome = "boreal forest"
@@ -447,45 +474,52 @@ class Node:
                 self.biome = "tundra"
             else:
                 self.biome = "boreal forest"
-        elif self.temp < 0.46:
+        elif self.temp < 0.48:
             if self.rainfall < 0.03:
                 self.biome = "desert"
-            elif self.rainfall < 0.17:
+            elif self.rainfall < 0.2:
                 self.biome = "shrubland"
             elif self.rainfall < 0.5:
                 self.biome = "forest"
             else:
                 self.biome = "tropical forest"
-        elif self.temp < 0.61:
+        elif self.temp < 0.62:
             if self.rainfall < 0.06:
                 self.biome = "desert"
-            elif self.rainfall < 0.13:
+            elif self.rainfall < 0.1:
+                self.biome = "shrubland"
+            elif self.rainfall < 0.16:
                 self.biome = "savanna"
             elif self.rainfall < 0.4:
                 self.biome = "forest"
             else:
                 self.biome = "tropical forest"
         elif self.temp < 0.7:
-            if self.rainfall < 0.1:
+            if self.rainfall < 0.08:
                 self.biome = "desert"
-            elif self.rainfall < 0.15:
+            elif self.rainfall < 0.18:
                 self.biome = "savanna"
             else:
                 self.biome = "tropical forest"
-        elif self.temp < 0.82:
+        elif self.temp < 0.81:
+            if self.rainfall < 0.11:
+                self.biome = "desert"
+            elif self.rainfall < 0.21:
+                self.biome = "savanna"
+            else:
+                self.biome = "tropical forest"
+        elif self.temp < 0.88:
             if self.rainfall < 0.13:
                 self.biome = "desert"
-            elif self.rainfall < 0.17:
+            elif self.rainfall < 0.4:
                 self.biome = "savanna"
             else:
                 self.biome = "tropical forest"
         else:
             if self.rainfall < 0.16:
                 self.biome = "desert"
-            elif self.rainfall < 0.24:
+            elif self.rainfall < 0.45:
                 self.biome = "shrubland"
-            elif self.rainfall < 0.36:
-                self.biome = "savanna"
             else:
                 self.biome = "tropical forest"
         if self.watery() == 1:
@@ -572,7 +606,7 @@ class Node:
             return None
         chanceReduction = 1
         structureType = None
-        if (self.landmass != None and self.hasWaterNeighbor() == 1) or self.river != None:
+        if (self.bodyWater == None and self.hasWaterNeighbor() == 1) or self.river != None:
             for k in range(9+chanceReduction):
                 if structureType == None and k != 0 and structureSeed % k == 0 and k >= self.resourceRegion.rootCity.cityTier+chanceReduction:
                     structureType = waterStructures[structureSeed % len(waterStructures)]
@@ -822,75 +856,49 @@ class Triangle:
         drawer.polygon([self.verts[0].coords(),self.verts[1].coords(),self.verts[2].coords()],fill=dCol,outline=dCol)
 
 class River:
-    def __init__(self,root,length,landms,parentNode=None,direction="reverse"):
+    def __init__(self,root,length,landms,parentNode=None):
         self.nodes = []
         self.body = None
         self.bodyOfWater = None
         self.landmass = landms
         self.root = root
         self.culturalNames = {}
+        self.toBeRemoved = False
         landms.rivers.append(self)
-        if direction == "direct":
-            currentNode = root
+        if root.river != None:
+            self.bodyOfWater = root.river.bodyOfWater
+        else:
+            for n in root.neighbors:
+                if n.bodyWater != None:
+                    self.bodyOfWater = n.bodyWater
+        if parentNode != None:
+            self.nodes.append(parentNode)
+        else:
             self.addNode(root)
-            continueRiver = True
-            k = 0
-            while continueRiver == True:
-                nextNode = currentNode.getNextWaterFlowNode()
-                if nextNode.elevation > currentNode.elevation:
-                    nextNode = currentNode
-                if nextNode.bodyWater != None or nextNode.seaLevel < 0.4:
-                    nextNode = currentNode
-                if nextNode == currentNode:
-                    continueRiver = False
-                if continueRiver == False and nextNode.bodyWater == None and nextNode.lake == 0:
-                    nextNode.lake = 6
-                k += 1
-                if k > 50:
-                    continueRiver = False
-                self.addNode(nextNode)
-                currentNode = nextNode
-        elif direction == "reverse":
-            if root.river != None:
-                self.bodyOfWater = root.river.bodyOfWater
+        current = root
+        j = 0
+        while j < length:
+            choice = current
+            possibleChoices = [a for a in current.tributaries.keys() if (a.river == None and a.getTributaryDepth() > 0 and a.hasWaterNeighbor() == 0)]
+            if len(possibleChoices) > 0:
+                choice = random.choice(possibleChoices)
+            tributed = 0
+            for n in possibleChoices:
+                if (current.tributaries[n] > tributed and random.random() > 0.4):
+                    tributed = current.tributaries[n]
+                    choice = n
+            if choice == current:
+                j = length
             else:
-                for n in root.neighbors:
-                    if n.bodyWater != None:
-                        self.bodyOfWater = n.bodyWater
-            if parentNode != None:
-                self.nodes.append(parentNode)
-            else:
-                self.addNode(root)
-            current = root
-            j = 0
-            while j < length:
-                choice = current
-                m = 1000
-                for k in current.neighbors:
-                    kr = 0
-                    if k.river != None and k.river != self:
-                        kr = 1
-                    for q in k.neighbors:
-                        if q.river != None and q.river != self and (parentNode == None or q.river != parentNode.river):
-                            kr = 1
-                    if (k.elevation < m and k.elevation >= current.elevation and kr == 0 and not k.hasWaterNeighbor(self.landmass.sealevel)):
-                        choice = k
-                        m = k.elevation
-                highestNeighbor = max([n.elevation for n in choice.neighbors])
-                if choice.elevation > highestNeighbor:
-                    j = length
-                elif choice == current:
-                    j = length
-                else:
-                    self.addNode(choice)
-                    if j > 4:
-                        if random.random() < 0.14:
-                            choice.lake = random.randint(3,6)
-                j+=1
-                current = choice
-        if random.random() < 0.8 and len(self.nodes) > 5:
+                self.addNode(choice)
+                if j > 2:
+                    if random.random() < 0.14:
+                        choice.lake = random.randint(3,6)
+            j+=1
+            current = choice
+        if random.random() < 0.9 and len(self.nodes) > 4:
             newRiverNode = random.choice(self.nodes[2:-2])
-            newRiver = River(newRiverNode,length*0.75,landms,parentNode=newRiverNode)
+            newRiver = River(newRiverNode,length,landms,parentNode=newRiverNode)
     def removeRiver(self):
         for n in self.nodes:
             n.river = None
@@ -998,22 +1006,27 @@ class Landmass:
                     self.addBoundary(p)
                 while k not in self.nodes and k.watery() == 0:
                     self.addNode(k)
-    def addRiver(self,length):
+    def getBoundary(self):
         self.boundary = []
         for n in self.nodes:
             for k in n.neighbors:
-                if k.watery() == 1:
+                if k.watery() == 1 and n.watery() == 0:
                     self.addBoundary(n)
+        return self.boundary
+    def addRiver(self,length,n):
         if len(self.boundary) < 18:
             return
-        root = random.choice(self.boundary)
-        riverLen = random.randint(length/4,length)
+        if n.river != None:
+            return
+        root = n
+        riverLen = random.randint(math.floor(length*0.75),length)
         newRiver = River(root,riverLen,self)
     def cullStreams(self,minLen):
         for r in self.rivers:
             if len(r.nodes) < minLen:
-                self.rivers.remove(r)
+                r.toBeRemoved = True
                 r.removeRiver()
+        self.rivers = [r for r in self.rivers if r.toBeRemoved == False]
 
 class Region:
     def __init__(self,rootNode):
@@ -1030,9 +1043,9 @@ class Region:
             self.biome += " tundra"
         if self.biome == "water":
             bodysize = len(self.nodes)
-            if bodysize > 2048:
+            if bodysize > 900:
                 self.biome = "ocean"
-            elif bodysize > 512:
+            elif bodysize > 180:
                 self.biome = "sea"
             else:
                 self.biome = "lake"
@@ -1287,7 +1300,7 @@ class City:
         possibleChoices = []
         firstChoices = []
         for k in self.node.resourceRegion.nodes:
-            if (k.landmass != None and k.hasWaterNeighbor() == 1) or k.river != None:
+            if (k.bodyWater == None and k.hasWaterNeighbor() == 1) or k.river != None:
                 possibleChoices.append(k)
                 structure = k.getStructure()
                 if structure == "fort" or structure == "port":
@@ -1555,7 +1568,7 @@ class City:
         yy = clamp(self.node.y + random.randint(-rng,rng),buffer,self.myMap.yDim-buffer)
         n = self.myMap.nearestNode(xx,yy)
         if ((n.culture == self.culture or n.culture == None) 
-            and n.city == None and n.resourceRegion == None and n.landmass != None and n.lake == 0):
+            and n.city == None and n.resourceRegion == None and n.bodyWater == None and n.lake == 0):
             cc = City(n,pop=emigrants,cltr=self.culture,m=self.myMap)
             self.sendRoadbuilders(n)
             self.population = clamp(self.population-emigrants,1,Tools.maxCityPop)
@@ -1830,7 +1843,7 @@ class ResourceRegion:
         rawMetal = 0
         rawAnimal = 0
         for p in self.nodes:
-            if p.landmass != None:
+            if p.bodyWater == None:
                 rawPlant += p.vegetation
                 rawMetal += p.metallicity
                 rawAnimal += p.herbivores + (p.carnivores/3)
@@ -4545,7 +4558,7 @@ class Population:
         followRivers = True
         if self.profession == "roadbuilder":
             landy = 2
-            followRivers = False
+            #followRivers = False
         if self.kind == "fleet":
             landy = 0
         for f in self.followers:
@@ -5776,7 +5789,7 @@ class Population:
             s += self.pronouns[self.gender].capitalize() + " " + self.toBe[self.gender]
             s += " the object of veneration for the " + o.nameFull()
             s += ".\n"
-        if self.kind == "fleet" or (self.location != None and self.location.landmass == None and self.kind in ["beast","army"]):
+        if self.kind == "fleet" or (self.location != None and self.location.bodyWater != None and self.kind in ["beast","army"]):
             s += self.possessive[self.gender].capitalize()
             s += " naval power is approximately equal to "
             s += str(math.ceil(self.power[0]/10)) + " cannons.\n"
@@ -5927,7 +5940,7 @@ class Path:
         a = self.nodes[-1]
         unpathable = False
         if land == 2:
-            if self.current.landmass != self.target.landmass:
+            if self.current.landmass != self.target.landmass or self.target.bodyWater != None:
                 unpathable = True
         if land == 0:
             sourceBody = None
@@ -6265,6 +6278,7 @@ class Map:
         self.yDim = mapDimY
         self.landmasses = []
         self.waterBodies = []
+        self.boundary = []
         self.regions = []
         self.cities = []
         self.cultures = []
@@ -6275,6 +6289,7 @@ class Map:
         self.roads = []
         self.resourceScale = 1.3
         self.sealevel = 0.4
+        self.latitudeTemperatureMod = 1+((random.uniform(-0.4,0.4)+random.uniform(-0.4,0.4))/2)
         self.date = random.randint(113,974)
         self.seasonStrength = 0.055
         self.setNorth()
@@ -6328,10 +6343,7 @@ class Map:
         else:
             return "Temperature: " + str(round((n.temp*self.tempScale*0.3),1)) + " degrees"
     def nodeRain(self,n):
-        if n.biome != "water":
-            rain =  "Rainfall: " + str(round(((n.rainfall)**2)*self.rainfallScale,1)) + "cm/yr"
-        else:
-            rain = "Rainfall: " + str(round((n.rainfall)*self.rainfallScale*0.03,1)) + "cm/yr"
+        rain =  "Rainfall: " + str(round(((n.rainfall))*self.rainfallScale,1)) + "cm/yr"
         return rain
     def nodeBiome(self,n):
         return n.biome
@@ -6397,7 +6409,7 @@ class Map:
         self.distScale = 12
         self.eScale = random.randint(5000,7000)
         self.tempScale = 73
-        self.rainfallScale = 1756
+        self.rainfallScale = 627
         self.fertScale = 100
         self.metalScale = 140000
         self.vegScale = 14295
@@ -6486,28 +6498,56 @@ class Map:
     def smooth(self,strength=1):
         for l in range(strength):
             for p in self.atlas:
-                p.smooth()
+                nbrs = [i.elevation for i in p.neighbors]
+                #nbrs.append(p.elevation)
+                p.newElevation = sum(nbrs)/len(nbrs)
+            for p in self.atlas:
+                p.elevation = p.newElevation
     def cullDots(self):
         for p in self.atlas:
-            count = len(p.neighbors)
-            for n in p.neighbors:
-                if n.elevation < self.sealevel:
-                    count -= 1
+            count = len([n for n in p.neighbors if n.elevation > self.sealevel])
             if count <= 1:
-                p = clamp(p.elevation,self.sealevel-0.01,255)
+                p.elevation = clamp(p.elevation,0.01,self.sealevel-0.01)
+    def simulateErosion(self,eras):
+        for e in range(eras):
+            steps = 40
+            for p in self.atlas:
+                p.tributaries = {}
+                p.simulatedErosion = 0.01
+                p.totalSimulatedErosion = 0.01
+            for i in range(steps):
+                for p in self.atlas:
+                    coeff = 0.9
+                    lowestOfNeighbors = p.getLowestOfNeighborsAndSelf()
+                    newElev = lowestOfNeighbors.elevation-(p.simulatedErosion*coeff)
+                    if newElev < self.sealevel:
+                        coeff *= 0.5
+                        newElev = lowestOfNeighbors.elevation-(p.simulatedErosion*coeff)
+                        if newElev < self.sealevel:
+                            coeff *= 0.5
+                    if lowestOfNeighbors != p:
+                        lowestOfNeighbors.simulatedErosion += (p.simulatedErosion*coeff)
+                        lowestOfNeighbors.totalSimulatedErosion += (p.simulatedErosion*coeff)
+                        if e == eras-1:
+                            lowestOfNeighbors.attribute(p,p.simulatedErosion)
+                        p.simulatedErosion = 0
+            if e != eras-1:
+                for p in self.atlas:
+                    p.elevation -= (p.totalSimulatedErosion*0.15)
     def simulateWater(self):
-        samples = 8
+        samples = 10
         for s in range(samples):
             for p in self.atlas:
-                p.simulatedWater = 0.02
+                p.simulatedWater = 0.03
             continueFlow = True
-            cycles = random.randint(20,100)
+            cycles = random.randint(5,28)
             i = 0
             while continueFlow == True:
                 for p in self.atlas:
                     lowestOfNeighbors = p.getLowestOfNeighbors()
-                    if p.elevation < lowestOfNeighbors.elevation and p.simulatedWater > 0.03:
-                        p.totalSimulatedWater = samples+0.1
+                    if p.elevation < lowestOfNeighbors.elevation:
+                        if p.simulatedWater > 0.12:
+                            p.totalSimulatedWater = samples+0.1
                     else:
                         lowestOfNeighbors.simulatedWater += p.simulatedWater
                         p.simulatedWater = 0
@@ -6520,19 +6560,22 @@ class Map:
             p.simulatedWater = p.totalSimulatedWater/samples
             if p.elevation > self.sealevel and p.simulatedWater >= 1:
                 p.lake = random.choice([3,4,4,5,5,6])
-        lakeOutlets = []
         for p in self.atlas:
             if p.elevation > self.sealevel and p.simulatedWater >= 1:
                 nextFlowNode = p.getNextWaterFlowNode()
                 if nextFlowNode.elevation > p.elevation:
                     waterRadius = p.nodesUntilDownhillFlow()
                     if waterRadius > 1 and waterRadius < 5:
-                        p.becomeLake(waterRadius)
-                        #cutoffNeighbor = p.getLowestNthNeighbor(waterRadius)
-                        #lakeOutlets.append(cutoffNeighbor)
-        for p in lakeOutlets:
-            if random.random() > 0.3:
-                newRiver = River(p,length=10,landms=p.landmass,parentNode=None,direction="direct")
+                        margin = 56
+                        if p.x < self.xDim-margin and p.x > margin and p.y < self.yDim-margin and p.y > margin:
+                            p.becomeLake(waterRadius)
+            if p.elevation < self.sealevel:
+                p.simulatedWater += random.uniform(0.1,0.2)
+        for i in range(2):
+            for p in self.atlas:
+                lst = [n.simulatedWater for n in p.neighbors]
+                lst.append(p.simulatedWater)
+                p.simulatedWater = sum(lst)/len(lst)
     def buildLandmass(self,root):
         if root.landmass != None or root.watery() == 1:
             return -1
@@ -6560,23 +6603,21 @@ class Map:
                 newReg = Region(p)
                 self.regions.append(newReg)
     def addRiver(self,length):
-        c = 0
-        landmass = self.landmasses[0]
-        while c < len(self.landmasses)*10:
-            landmass = self.landmasses[math.floor(random.random()*len(self.landmasses))]
-            if landmass.size > length*8:
-                c = 100000000
-            c += 1
-        landmass.addRiver(length)
+        if self.boundary == []:
+            for l in self.landmasses:
+                self.boundary.extend(l.getBoundary())
+        root = random.choice([n for n in self.boundary if n.getTributaryDepth() > 2])
+        landmass = root.landmass
+        landmass.addRiver(length,root)
     def addMinorRiver(self,count):
         for i in range(count):
-            self.addRiver(self.n/512)
+            self.addRiver(self.n/256)
     def addMajorRiver(self,count):
         for i in range(count):
             self.addRiver(self.n/128)
     def cullStreams(self):
         for l in self.landmasses:
-            l.cullStreams(10)
+            l.cullStreams(3)
     def addRandomPeaks(self):
         peakCount = random.randint(1,7)
         for n in range(peakCount):
@@ -6590,6 +6631,8 @@ class Map:
             if dist <= radius:
                 multiplier = distMod(dist,radius)
                 remainingHeight = 1-p.elevation
+                if (maximum < 0):
+                    remainingHeight = p.elevation
                 p.elevation = p.elevation+(maximum*multiplier*remainingHeight)
     def addHill(self,xx,yy,maximum=0.4,radius=128):
         hillCenter = (xx,yy)
@@ -6636,7 +6679,7 @@ class Map:
                 self.smooth(1)
                 self.addHill(self.xDim/2,self.yDim/2,random.uniform(0.40,0.46),radius=random.uniform(0.5,1.1)*self.xDim/11)
                 self.addSineHill(self.xDim/2,self.yDim/2,-0.35,radius=random.uniform(0.6,1)*self.xDim/12)
-        if shape == "shore" or shape == "highlands":
+        if shape in ["shore","highlands","ocean"]:
             corner = random.randint(0,3)
             if corner == 0:
                 xx = 0
@@ -6651,8 +6694,8 @@ class Map:
                 xx = 0
                 yy = self.yDim
             self.addSineHill(xx,yy,0.4,radius=self.xDim*1.3)
-            if shape == "highlands":
-                self.addSineHill(self.xDim/2,self.yDim/2,0.25,radius=self.xDim*1.3)
+            if shape in ["highlands","ocean"]:
+                self.addSineHill(self.xDim/2,self.yDim/2,0.25,radius=self.xDim*1.6)
                 self.addHills(random.randint(4,8),0.2)
                 self.addRandomPeaks()
             self.smooth(2)
@@ -6660,21 +6703,22 @@ class Map:
             self.addHills(random.randint(5,9),0.45)
             self.addRandomPeaks()
             self.smooth(2)
-        if shape == "plain":
-            self.addSineHill(self.xDim/2,self.yDim/2,0.6,radius=self.xDim*5)
-            self.smooth(2)
         if shape not in ["volcanic","noise"]:
             self.addMountains()
         self.addHills()
+        if shape == "ocean":
+            self.addSineHill(self.xDim/2,self.yDim/2,-0.4,radius=self.xDim*random.uniform(0.5,0.7))
+            self.addSineHill(self.xDim/2,self.yDim/2,-0.3,radius=self.xDim*random.uniform(0.5,0.8))
+            self.addSineHill(self.xDim/2,self.yDim/2,-0.2,radius=self.xDim*random.uniform(0.5,0.8))
         self.smooth(1)
     def addRandomShape(self):
-        shp = random.choice(["highlands","volcanic","shore","archipelago","island","noise"])
+        shp = random.choice(["highlands","volcanic","shore","archipelago","island","noise","ocean"])
         self.addShape(shp)
     def nodeSlopes(self):
         for p in self.atlas:
             p.getSlope()
     def waterdistances(self):
-        self.wdmax = 24
+        self.wdmax = 30
         for i in range(self.wdmax):
             for p in self.atlas:
                 p.waterdist(self.sealevel)
@@ -6683,22 +6727,24 @@ class Map:
                 p.waterdistance = self.wdmax
     def rainfall(self):
         for p in self.atlas:
-            rainfall = (0.26*random.uniform(0.7,1.3)) + (p.simulatedWater*0.8)
-            rainfall = ((rainfall*(0.6-((p.temp*0.72)+(p.elevation*0.3)+(0.8*(p.waterdistance)/(self.wdmax)))))+rainfall)/2
+            rainfall = (0.2*random.uniform(0.7,1.3)) + (p.simulatedWater*random.uniform(0.9,1.1))
+            wdRatio = clamp(p.waterdistance/self.wdmax,0,1)*random.uniform(0.8,1.2)
+            rainfall = (((0.5-((p.temp*0.35)+(p.elevation*0.12)+(0.72*wdRatio))))+rainfall)/2
             for n in p.neighbors:
-                if n.lake > 0:
-                    rainfall = (rainfall+0.07)*random.uniform(0.9,1.4)
-                elif n.river != None:
+                if n.bodyWater != None:
+                    rainfall = (rainfall+0.05)*random.uniform(0.9,1.2)
+                elif n.lake > 0:
                     rainfall = (rainfall+0.07)*random.uniform(0.9,1.3)
-            if p.lake > 0:
+                elif n.river != None:
+                    rainfall = (rainfall+0.07)*random.uniform(0.9,1.2)
+            if p.bodyWater != None:
+                rainfall = (rainfall+0.06)*random.uniform(1,1.4)
+            elif p.lake > 0:
                 rainfall = (rainfall+0.08)*random.uniform(1,1.4)
             elif p.river != None:
                 rainfall = (rainfall+0.08)*random.uniform(1,1.3)
-            for l in p.neighbors:
-                if l.watery() == 1:
-                    rainfall *= random.uniform(0.9,1.6)
             p.rainfall = clamp(rainfall,0,1)
-        for n in range(3):
+        for n in range(4):
             for p in self.atlas:
                 lst = [n.rainfall for n in p.neighbors]
                 lst.append(p.rainfall)
@@ -6710,6 +6756,7 @@ class Map:
             s = self.seasonStrength
             seasonMod = clamp(1+(math.sin((math.pi*self.date)/2)*s),1-s,1+s)
             latTemp = 0.5*(p.dist(self.north)/self.xDim)
+            latTemp = clamp(latTemp*self.latitudeTemperatureMod,0,0.71)
             elevationTemp = 0.4*(1-p.elevation)
             p.temp = clamp(seasonMod*(elevationTemp+latTemp),0,1)
         for n in range(1):
@@ -6819,8 +6866,8 @@ class Map:
     def biomesInit(self):
         bColors = {}
         bColors["desert"] = (133, 96, 84)
-        bColors["savanna"] = (116, 125, 79)
-        bColors["shrubland"] = (83, 107, 64)
+        bColors["savanna"] = (112, 122, 83)
+        bColors["shrubland"] = (79, 101, 60)
         bColors["tundra"] = (97, 118, 93)
         bColors["boreal forest"] = (63, 100, 70)
         bColors["forest"] = (46, 94, 45)
@@ -7335,34 +7382,7 @@ class Map:
         self.skyLbl.image = self.skyImg
         if self.displayConst != None:
             self.constString.set(self.displayConst.constellationNotes())
-    def redraw(self):
-        visualAtlas = Image.new("RGB",(mapDimX,mapDimY),"white")
-        graphDraw = ImageDraw.Draw(visualAtlas)
-        if self.viewmode == 0:
-            rds = []
-            for tri in self.triangles:
-                tri.drawReal(graphDraw,self.sealevel)
-            for n in self.atlas:
-                n.drawReal(graphDraw,self.sealevel)
-                if len(n.roads) > 0:
-                    rds.append(n)
-            for l in self.landmasses:
-                for r in l.rivers:
-                    r.drawRiver(graphDraw,self.xDim)
-            for r in rds:
-                r.drawRoads(graphDraw,self.roadCol)
-            for a in self.atlas:
-                a.drawSelf(graphDraw)
-            for c in self.cities:
-                c.drawSelf(graphDraw)
-        elif self.viewmode == 1:
-            for tri in self.triangles:
-                tri.drawTerritory(graphDraw,self.sealevel)
-            for l in self.landmasses:
-                for r in l.rivers:
-                    r.drawRiver(graphDraw,self.xDim)
-            for c in self.cities:
-                c.drawSelf(graphDraw)
+    def drawLakes(self,graphDraw):
         for n in self.atlas:
             if n.lake > 0:
                 dCol = Tools.waterColor
@@ -7381,6 +7401,36 @@ class Map:
                     cornerY = n.y + lengthDirY(dist,angle)
                     polygonCorners.append((cornerX,cornerY))
                 graphDraw.polygon(polygonCorners,dCol,dCol)
+    def redraw(self):
+        visualAtlas = Image.new("RGB",(mapDimX,mapDimY),"white")
+        graphDraw = ImageDraw.Draw(visualAtlas)
+        if self.viewmode == 0:
+            rds = []
+            for tri in self.triangles:
+                tri.drawReal(graphDraw,self.sealevel)
+            for n in self.atlas:
+                n.drawReal(graphDraw,self.sealevel)
+                if len(n.roads) > 0:
+                    rds.append(n)
+            for l in self.landmasses:
+                for r in l.rivers:
+                    r.drawRiver(graphDraw,self.xDim)
+            self.drawLakes(graphDraw)
+            for r in rds:
+                r.drawRoads(graphDraw,self.roadCol)
+            for a in self.atlas:
+                a.drawSelf(graphDraw)
+            for c in self.cities:
+                c.drawSelf(graphDraw)
+        elif self.viewmode == 1:
+            for tri in self.triangles:
+                tri.drawTerritory(graphDraw,self.sealevel)
+            for l in self.landmasses:
+                for r in l.rivers:
+                    r.drawRiver(graphDraw,self.xDim)
+            self.drawLakes(graphDraw)
+            for c in self.cities:
+                c.drawSelf(graphDraw)
         if self.drawpops == 1:
             for c in self.cultures:
                 c.drawPops(graphDraw)
@@ -8184,19 +8234,20 @@ for q in range(len(atlas)):
     nodeY = atlas[q].y
     npFloatAtlas[q] = [nodeX,nodeY]
 
-print("Triangulating...")
 from scipy.spatial import Delaunay
-triangulation = Delaunay(npFloatAtlas)
 
-trisList = triangulation.vertices
-trisVerts = triangulation.points
 print("Relaxing points...")
-relaxLloyd(npFloatAtlas,2)
+npFloatAtlas = relaxLloyd(npFloatAtlas,1,mapDimX,64)
 for q in range(len(npFloatAtlas)):
     nodeX = npFloatAtlas[q,0]
     nodeY = npFloatAtlas[q,1]
     atlas[q].x = nodeX
     atlas[q].y = nodeY
+
+print("Triangulating...")
+triangulation = Delaunay(npFloatAtlas)
+trisList = triangulation.vertices
+trisVerts = triangulation.points
 
 triangles = []
 triIndex = 0
@@ -8223,16 +8274,19 @@ world.perlinElevation(6)
 world.elevationAdd(-0.3)
 world.addRandomShape()
 world.addRandomPeaks()
-world.smooth(2)
 world.setSeaLevel(0.4)
+print("Simulating erosion...")
+world.simulateErosion(3)
+world.smooth(4)
+world.simulateErosion(1)
 world.cullDots()
 world.clampElevation()
 world.buildAllLand()
 world.buildAllWater()
 print("Simulating water...")
 world.simulateWater()
-world.addMajorRiver(10)
-world.addMinorRiver(10)
+world.addMajorRiver(20)
+world.addMinorRiver(20)
 world.waterdistances()
 world.soilProperties()
 print("Defining biomes...")
