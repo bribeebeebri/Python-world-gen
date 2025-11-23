@@ -114,9 +114,11 @@ class Node:
         self.structureName = ""
         self.savedStructure = None
         self.tempDistance = 100000
+        self.baselineTemperature = 0.5
         self.simulatedWater = 0
         self.totalSimulatedWater = 0
         self.tributaryDepth = -1
+        self.tributaryDescendant = None
     def coords(self):
         tupleVert = (self.x,self.y)
         return tupleVert
@@ -130,6 +132,12 @@ class Node:
         distY = abs(self.y-xy[1])
         dist = math.sqrt((distX**2)+(distY**2))
         return dist
+    def steepnessToNode(self,n):
+        steepness = self.dist(n)
+        if steepness == 0:
+            return 1
+        steepness = (self.elevation-n.elevation)/steepness
+        return steepness
     def isLinked(self,nNode):
         if nNode in self.neighbors:
             return 1
@@ -236,6 +244,27 @@ class Node:
                 nbr = p
                 distance = newDist
         return nbr
+    def eastMostNeighbor(self):
+        n = self
+        for p in self.neighbors:
+            if p.x > n.x:
+                n = p
+        self.eastMostNbr = n
+        return n
+    def southMostNeighbor(self):
+        n = self
+        for p in self.neighbors:
+            if p.y > n.y:
+                n = p
+        self.southMostNbr = n
+        return n
+    def northMostNeighbor(self):
+        n = self
+        for p in self.neighbors:
+            if p.y < n.y:
+                n = p
+        self.northMostNbr = n
+        return n
     def westMostNeighbor(self):
         n = self
         for p in self.neighbors:
@@ -261,6 +290,33 @@ class Node:
                 ne = pe
                 n = p
         return n
+    def getTributaryDescendant(self):
+        if self.tributaryDescendant != None:
+            return self.tributaryDescendant
+        chosenNode = self
+        chosenSteepness = 0
+        for n in [n for n in self.neighbors if n.elevation < self.elevation]:
+            steepness = self.steepnessToNode(n)
+            if steepness > chosenSteepness:
+                chosenNode = n
+                chosenSteepness = steepness
+        self.tributaryDescendant = chosenNode
+        return chosenNode
+    def getTributaryDescendantExcludingSome(self,l=[]):
+        possibleChoices = self.neighbors.copy()
+        for n in l:
+            if n in possibleChoices or n.elevation > self.elevation:
+                possibleChoices.remove(n)
+        if possibleChoices == []:
+            return self
+        chosenNode = self
+        chosenSteepness = 0
+        for n in possibleChoices:
+            steepness = self.steepnessToNode(n)
+            if steepness > chosenSteepness:
+                chosenNode = n
+                chosenSteepness = steepness
+        return chosenNode
     def getLowestOfNeighbors(self):
         if self.neighbors == []:
             return self
@@ -269,15 +325,6 @@ class Node:
     def getLowestOfNeighborsAndSelf(self):
         possibleChoices = self.neighbors.copy()
         possibleChoices.append(self)
-        lowestOfNeighbors = min(possibleChoices,key=lambda x:x.elevation)
-        return lowestOfNeighbors
-    def getLowestOfNeighborsExcludingSome(self,l=[]):
-        possibleChoices = self.neighbors.copy()
-        for n in l:
-            if l in possibleChoices:
-                possibleChoices.remove(n)
-        if possibleChoices == []:
-            return self.getLowestOfNeighbors()
         lowestOfNeighbors = min(possibleChoices,key=lambda x:x.elevation)
         return lowestOfNeighbors
     def getHighestOfNeighbors(self):
@@ -345,11 +392,13 @@ class Node:
     def getNextWaterFlowNode(self):
         if self.bodyWater != None or self.elevation < 0.4:
             return self
-        nextNode = self.getLowestOfNeighbors()
+        if self.getLowestOfNeighborsAndSelf() == self:
+            return self
+        nextNode = self.getTributaryDescendant()
         excluded = []
         while self.elevation > nextNode.elevation and nextNode.getNextWaterFlowNode() == self:
             excluded.append(nextNode)
-            nextNode = self.getLowestOfNeighborsExcludingSome(excluded)
+            nextNode = self.getTributaryDescendantExcludingSome(excluded)
         return nextNode
     def getUltimateWaterFlowNode(self):
         if self.bodyWater != None or self.elevation < 0.4:
@@ -376,28 +425,24 @@ class Node:
                             i.simulatedWater += random.uniform(0.2,0.5)
                         createdLake.addNode(i)
             tries += 1
+    def getMaxSlope(self):
+        maximum = self.getHighestOfNeighborsAndSelf()
+        minimum = self.getLowestOfNeighborsAndSelf()
+        maxSlope = maximum.steepnessToNode(minimum)
+        return abs(maxSlope)
     def getSlope(self):
-        minimum = self.minNeighbor()
-        maximum = self.maxNeighbor()
-        rise = maximum.elevation-minimum.elevation
-        run = self.dist(minimum)+self.dist(maximum)
-        if run != 0:
-            m = rise/run
-        else:
-            m = 0.1
-        self.slope = m
-        return m
-    def slopeDirection(self):
         self.westMostNeighbor()
-        if self.westMostNbr.elevation > self.elevation:
-            self.slopeDir = -1
-        else:
-            self.slopeDir = 1
-    def realSlope(self):
-        self.getSlope()
-        self.slopeDirection()
-        self.rSlope = self.slope*self.slopeDir
-        return self.rSlope
+        self.eastMostNeighbor()
+        self.southMostNeighbor()
+        self.northMostNeighbor()
+        eastRise = self.eastMostNbr.elevation-self.westMostNbr.elevation
+        southRise = self.southMostNbr.elevation-self.northMostNbr.elevation
+        eastRun = max((self.eastMostNbr.x-self.westMostNbr.x),1)
+        southRun = max((self.southMostNbr.y-self.northMostNbr.y),1)
+        self.eastSlope = eastRise/eastRun
+        self.southSlope = southRise/southRun
+        self.slope = avg2(self.eastSlope,self.southSlope)
+        return self.slope
     def nearestCity(self):
         if self.city != None:
             return self
@@ -455,56 +500,57 @@ class Node:
             self.biome = "mountains"
         elif self.temp < 0.12:
             self.biome = "frost"
-        elif self.temp < 0.18:
-            if self.rainfall < 0.28:
+        elif self.temp < 0.23:
+            if self.rainfall < 0.4:
                 self.biome = "frost"
-            elif self.rainfall < 0.41:
-                self.biome = "tundra"
-            else:
-                self.biome = "boreal forest"
-        elif self.temp < 0.26:
-            if self.rainfall < 0.18:
-                self.biome = "frost"
-            elif self.rainfall < 0.24:
-                self.biome = "tundra"
-            else:
-                self.biome = "boreal forest"
-        elif self.temp < 0.34:
-            if self.rainfall < 0.2:
-                self.biome = "tundra"
-            else:
-                self.biome = "boreal forest"
-        elif self.temp < 0.48:
-            if self.rainfall < 0.03:
-                self.biome = "desert"
-            elif self.rainfall < 0.2:
+            elif self.rainfall < 0.8:
                 self.biome = "shrubland"
-            elif self.rainfall < 0.5:
-                self.biome = "forest"
             else:
-                self.biome = "tropical forest"
+                self.biome = "boreal forest"
+        elif self.temp < 0.3:
+            if self.rainfall < 0.26:
+                self.biome = "frost"
+            else:
+                self.biome = "boreal forest"
+        elif self.temp < 0.36:
+            if self.rainfall < 0.21:
+                self.biome = "tundra"
+            else:
+                self.biome = "boreal forest"
+        elif self.temp < 0.44:
+            if self.rainfall < 0.15:
+                self.biome = "shrubland"
+            else:
+                self.biome = "boreal forest"
+        elif self.temp < 0.51:
+            if self.rainfall < 0.04:
+                self.biome = "desert"
+            elif self.rainfall < 0.14:
+                self.biome = "shrubland"
+            else:
+                self.biome = "forest"
         elif self.temp < 0.62:
             if self.rainfall < 0.06:
                 self.biome = "desert"
             elif self.rainfall < 0.1:
                 self.biome = "shrubland"
-            elif self.rainfall < 0.16:
+            elif self.rainfall < 0.17:
                 self.biome = "savanna"
-            elif self.rainfall < 0.4:
+            elif self.rainfall < 0.75:
                 self.biome = "forest"
             else:
                 self.biome = "tropical forest"
         elif self.temp < 0.7:
             if self.rainfall < 0.08:
                 self.biome = "desert"
-            elif self.rainfall < 0.18:
+            elif self.rainfall < 0.14:
                 self.biome = "savanna"
             else:
                 self.biome = "tropical forest"
         elif self.temp < 0.81:
             if self.rainfall < 0.11:
                 self.biome = "desert"
-            elif self.rainfall < 0.21:
+            elif self.rainfall < 0.16:
                 self.biome = "savanna"
             else:
                 self.biome = "tropical forest"
@@ -526,11 +572,19 @@ class Node:
             self.biome = "water"
     def setBiomeColor(self,col):
         self.biomeColor = col
-        slope = clamp((self.realSlope()*(7500)),-26,26)
-        shade0 = math.floor((-16)+self.biomeColor[0]+slope+(((self.elevation+1)**3)*8))
-        shade1 = math.floor((-16)+self.biomeColor[1]+slope+(((self.elevation+1)**3)*8))
-        shade2 = math.floor((-16)+self.biomeColor[2]+slope+(((self.elevation+1)**3)*8))
-        self.shadedBiomeColor = (shade0,shade1,shade2)
+        offset = 10
+        slope = self.getSlope()
+        if slope > 0:
+            slope = slope*9000
+        else:
+            slope = slope*16000
+        elevationCoefficient = clamp(1+(self.elevation*0.666),1,1.666)
+        slope *= elevationCoefficient
+        slope = clamp(slope,-26*elevationCoefficient,20*elevationCoefficient)
+        shade0 = math.floor(offset+self.biomeColor[0]+slope)
+        shade1 = math.floor(offset+self.biomeColor[1]+slope)
+        shade2 = math.floor(offset+self.biomeColor[2]+slope)
+        self.shadedBiomeColor = (clamp(shade0,1,254),clamp(shade1,1,254),clamp(shade2,1,254))
     def claim(self,n,sealevel=0.4):
         if n.resourceRegion != None and n.resourceRegion.culture != self.culture and n.resourceRegion.rootCity.culture != self.culture:
             return -1
@@ -839,20 +893,18 @@ class Triangle:
         dCol = (rr,gg,bb)
         drawer.polygon([self.verts[0].coords(),self.verts[1].coords(),self.verts[2].coords()],fill=dCol,outline=dCol)
     def drawReal(self,drawer,sl):
+        underwater = 0
+        for f in self.verts:
+            if f.watery() == 1:
+                underwater = 1
         elevationList = [self.verts[f].elevation for f in range(len(self.verts))]
         elevation = sum(elevationList)/3
-        col = math.floor(((elevation*255)+64)/2)
-        underwater = 0
         avgR = math.floor(sum([self.verts[f].shadedBiomeColor[0] for f in range(len(self.verts))])/3)
         avgG = math.floor(sum([self.verts[f].shadedBiomeColor[1] for f in range(len(self.verts))])/3)
         avgB = math.floor(sum([self.verts[f].shadedBiomeColor[2] for f in range(len(self.verts))])/3)
         dCol = (avgR,avgG,avgB)
-        for f in self.verts:
-            if f.watery() == 1:
-                underwater = 1
         if underwater == 1:
-            ratio = col/128
-            dCol = (math.floor(Tools.waterColor[0]*ratio),math.floor(Tools.waterColor[1]*ratio),math.floor(Tools.waterColor[2]*ratio))
+            dCol = interpolate2colors(waterColorAtElevation(elevation),dCol,Tools.oceanOpacity)
         drawer.polygon([self.verts[0].coords(),self.verts[1].coords(),self.verts[2].coords()],fill=dCol,outline=dCol)
 
 class River:
@@ -915,16 +967,13 @@ class River:
             drawNodes.append(n.coords())
         drawer.line(drawNodes,dCol,2)
     def drawRiver(self,drawer,xDim):
-        for l in self.nodes:
-            l.getSlope()
-        dCol = Tools.waterColor
         for i in range(len(self.nodes)-1):
-            dCol = Tools.waterColor
             n = self.nodes[i]
             n1 = self.nodes[i+1]
+            dCol = waterColorAtElevation(n.elevation)
             scale = xDim/2
-            w = clamp((1/n.slope)/scale,0.5,1.1)
-            w1 = clamp((1/n1.slope)/scale,0.5,1.1)
+            w = clamp((1/abs(n.getMaxSlope()))/scale,0.5,1)
+            w1 = clamp((1/abs(n1.getMaxSlope()))/scale,0.5,1)
             drawCircle(drawer,n.x,n.y,w,dCol)
             drawCircle(drawer,n1.x,n1.y,w1,dCol)
             drawTrapezoid(drawer,n.x,n.y,n1.x,n1.y,w,w1,dCol)
@@ -6483,6 +6532,10 @@ class Map:
         noiseThing = noiseMaker(math.floor(self.xDim/scale),math.floor(self.yDim/scale))
         for p in self.atlas:
             p.elevation = noiseThing.turbulence(math.floor(p.x),math.floor(p.y),2**octaves)
+    def temperatureBaseline(self,octaves,scale=1):
+        noiseThing = noiseMaker(math.floor(self.xDim/scale),math.floor(self.yDim/scale))
+        for p in self.atlas:
+            p.baselineTemperature = noiseThing.turbulence(math.floor(p.x),math.floor(p.y),2**octaves)
     def flatten(self):
         for p in self.atlas:
             p.elevation = 0.5
@@ -6515,21 +6568,22 @@ class Map:
                 p.tributaries = {}
                 p.simulatedErosion = 0.01
                 p.totalSimulatedErosion = 0.01
+                p.tributaryDescendant = None
             for i in range(steps):
                 for p in self.atlas:
                     coeff = 0.9
-                    lowestOfNeighbors = p.getLowestOfNeighborsAndSelf()
-                    newElev = lowestOfNeighbors.elevation-(p.simulatedErosion*coeff)
-                    if newElev < self.sealevel:
-                        coeff *= 0.5
-                        newElev = lowestOfNeighbors.elevation-(p.simulatedErosion*coeff)
+                    nodeDescendant = p.getTributaryDescendant()
+                    if nodeDescendant != p:
+                        newElev = nodeDescendant.elevation-(p.simulatedErosion*coeff)
                         if newElev < self.sealevel:
                             coeff *= 0.5
-                    if lowestOfNeighbors != p:
-                        lowestOfNeighbors.simulatedErosion += (p.simulatedErosion*coeff)
-                        lowestOfNeighbors.totalSimulatedErosion += (p.simulatedErosion*coeff)
+                            newElev = nodeDescendant.elevation-(p.simulatedErosion*coeff)
+                            if newElev < self.sealevel:
+                                coeff *= 0.5
+                        nodeDescendant.simulatedErosion += (p.simulatedErosion*coeff)
+                        nodeDescendant.totalSimulatedErosion += (p.simulatedErosion*coeff)
                         if e == eras-1:
-                            lowestOfNeighbors.attribute(p,p.simulatedErosion)
+                            nodeDescendant.attribute(p,p.simulatedErosion)
                         p.simulatedErosion = 0
             if e != eras-1:
                 for p in self.atlas:
@@ -6544,13 +6598,13 @@ class Map:
             i = 0
             while continueFlow == True:
                 for p in self.atlas:
-                    lowestOfNeighbors = p.getLowestOfNeighbors()
-                    if p.elevation < lowestOfNeighbors.elevation:
+                    nodeDescendant = p.getTributaryDescendant()
+                    if nodeDescendant != p:
+                        nodeDescendant.simulatedWater += p.simulatedWater
+                        p.simulatedWater = 0
+                    else:
                         if p.simulatedWater > 0.12:
                             p.totalSimulatedWater = samples+0.1
-                    else:
-                        lowestOfNeighbors.simulatedWater += p.simulatedWater
-                        p.simulatedWater = 0
                 i += 1
                 if i > cycles:
                     continueFlow = False
@@ -6563,19 +6617,22 @@ class Map:
         for p in self.atlas:
             if p.elevation > self.sealevel and p.simulatedWater >= 1:
                 nextFlowNode = p.getNextWaterFlowNode()
-                if nextFlowNode.elevation > p.elevation:
+                if nextFlowNode.elevation > p.elevation or nextFlowNode == p:
                     waterRadius = p.nodesUntilDownhillFlow()
-                    if waterRadius > 1 and waterRadius < 5:
-                        margin = 56
+                    if waterRadius > 1 and waterRadius < 6:
+                        margin = 64
                         if p.x < self.xDim-margin and p.x > margin and p.y < self.yDim-margin and p.y > margin:
                             p.becomeLake(waterRadius)
             if p.elevation < self.sealevel:
                 p.simulatedWater += random.uniform(0.1,0.2)
-        for i in range(2):
+        smoothingSteps = 2
+        for i in range(smoothingSteps):
             for p in self.atlas:
                 lst = [n.simulatedWater for n in p.neighbors]
                 lst.append(p.simulatedWater)
-                p.simulatedWater = sum(lst)/len(lst)
+                p.newSimulatedWater = sum(lst)/len(lst)
+            for p in self.atlas:
+                p.simulatedWater = p.newSimulatedWater
     def buildLandmass(self,root):
         if root.landmass != None or root.watery() == 1:
             return -1
@@ -6758,12 +6815,16 @@ class Map:
             latTemp = 0.5*(p.dist(self.north)/self.xDim)
             latTemp = clamp(latTemp*self.latitudeTemperatureMod,0,0.71)
             elevationTemp = 0.4*(1-p.elevation)
-            p.temp = clamp(seasonMod*(elevationTemp+latTemp),0,1)
-        for n in range(1):
+            p.temp = elevationTemp+latTemp
+            p.temp = seasonMod*interpolate2(p.temp,p.baselineTemperature,0.7)
+            p.temp = clamp(p.temp*1.05,0,1)
+        for n in range(2):
             for p in self.atlas:
                 lst = [n.temp for n in p.neighbors]
                 lst.append(p.temp)
-                p.temp = sum(lst)/len(lst)
+                p.newTemp = sum(lst)/len(lst)
+            for p in self.atlas:
+                p.temp = p.newTemp
         for p in self.atlas:
             p.temp *= p.permanentModifiers["temperature"]
     def soilProperties(self):
@@ -6865,15 +6926,15 @@ class Map:
             self.stars.append(newStar)
     def biomesInit(self):
         bColors = {}
-        bColors["desert"] = (133, 96, 84)
-        bColors["savanna"] = (112, 122, 83)
-        bColors["shrubland"] = (79, 101, 60)
-        bColors["tundra"] = (97, 118, 93)
-        bColors["boreal forest"] = (63, 100, 70)
-        bColors["forest"] = (46, 94, 45)
+        bColors["desert"] = (128, 93, 78)
+        bColors["savanna"] = (99, 100, 67)
+        bColors["shrubland"] = (87, 102, 61)
+        bColors["tundra"] = (87, 97, 71)
+        bColors["boreal forest"] = (43, 70, 50)
+        bColors["forest"] = (46, 81, 43)
         bColors["tropical forest"] = (14, 68, 23)
-        bColors["frost"] = (181, 194, 190)
-        bColors["mountains"] = (88, 86, 81)
+        bColors["frost"] = (183, 192, 190)
+        bColors["mountains"] = (88, 86, 83)
         bColors["water"] = Tools.waterColor
         bColors["ruins"] = (28, 27, 26)
         self.biomeColors = bColors
@@ -7385,7 +7446,7 @@ class Map:
     def drawLakes(self,graphDraw):
         for n in self.atlas:
             if n.lake > 0:
-                dCol = Tools.waterColor
+                dCol = waterColorAtElevation(n.elevation)
                 sd = n.x+n.y
                 random.seed(sd)
                 polygonOrder = random.randint(3,6)
@@ -8271,13 +8332,15 @@ world.triangles = triangles
 
 print("Generating terrain...")
 world.perlinElevation(6)
+world.temperatureBaseline(4)
 world.elevationAdd(-0.3)
 world.addRandomShape()
 world.addRandomPeaks()
 world.setSeaLevel(0.4)
 print("Simulating erosion...")
-world.simulateErosion(3)
-world.smooth(4)
+world.smooth(random.randint(2,3))
+world.simulateErosion(random.randint(3,4))
+world.smooth(random.randint(3,4))
 world.simulateErosion(1)
 world.cullDots()
 world.clampElevation()
@@ -8285,8 +8348,8 @@ world.buildAllLand()
 world.buildAllWater()
 print("Simulating water...")
 world.simulateWater()
-world.addMajorRiver(20)
-world.addMinorRiver(20)
+world.addMajorRiver(random.randint(15,26))
+world.addMinorRiver(random.randint(15,26))
 world.waterdistances()
 world.soilProperties()
 print("Defining biomes...")

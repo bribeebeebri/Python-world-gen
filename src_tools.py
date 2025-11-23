@@ -10,10 +10,6 @@ import math
 import numpy as np
 import colorsys
 
-def rgbToHsv(col):
-    dec = colorsys.rgb_to_hsv(col[0]/255,col[1]/255,col[2]/255)
-    return (math.floor(dec[0]*255),math.floor(dec[1]*255),math.floor(dec[2]*255))
-
 def factorsOf(a):
     factrs = [a]
     maximum = math.ceil(math.sqrt(a))
@@ -55,7 +51,45 @@ def drawCircle(drawer,x,y,radius,color,out=False):
         drawer.ellipse([(x1,y1),(x2,y2)],outline=color,fill=None)
 
 def avg2(v1,v2):
-    return ((v1+v2)/2)
+    return (v1+v2)/2
+
+def avg3(v1,v2,v3):
+    return (v1+v2+v3)/3
+
+def interpolate2(v1,v2,ratio=0.5):
+    return (v1*ratio)+(v2*(1-ratio))
+
+def pointBetween2(v1,v2,ratio=0.5):
+    return max(v1,v2)-((max(v1,v2)-min(v1,v2))*ratio)
+
+def avg2colors(col1,col2):
+    return (math.floor(avg2(col1[0],col2[0])),math.floor(avg2(col1[1],col2[1])),math.floor(avg2(col1[2],col2[2])))
+
+def interpolate2colors(col1,col2,ratio):
+    return (math.floor(interpolate2(col1[0],col2[0],ratio)),math.floor(interpolate2(col1[1],col2[1],ratio)),math.floor(interpolate2(col1[2],col2[2],ratio)))
+
+def pointBetween2colors(col1,col2,ratio=0.5):
+    return (math.floor(pointBetween2(col1[0],col2[0],ratio)),math.floor(pointBetween2(col1[1],col2[1],ratio)),math.floor(pointBetween2(col1[2],col2[2],ratio)))
+
+def rgbToHsv(col):
+    dec = colorsys.rgb_to_hsv(col[0]/255,col[1]/255,col[2]/255)
+    return (math.floor(dec[0]*255),math.floor(dec[1]*255),math.floor(dec[2]*255))
+
+def waterColorAtElevation(elevation):
+    ratio = ((elevation+0.1)/0.5)
+    blueRatio = ratio**2
+    ratio = ratio**3
+    ratio -= 0.1
+    minimumRatio = 0.25
+    minimumBlueRatio = 0.3
+    if elevation > 0.4:
+        ratio = (elevation+0.5)/0.9
+        blueRatio = ratio;
+    if ratio < minimumRatio:
+        ratio = avg3(ratio,minimumRatio,minimumRatio)
+    if blueRatio < minimumBlueRatio:
+        blueRatio = avg3(blueRatio,minimumBlueRatio,minimumBlueRatio)
+    return (math.floor(Tools.waterColor[0]*ratio),math.floor(Tools.waterColor[1]*ratio),math.floor(Tools.waterColor[2]*blueRatio))
 
 def lengthDirX(length, angle):
   radian_angle = math.radians(angle)
@@ -188,7 +222,7 @@ class BookTools:
 class Tools:
     maxCityPop = 100000000
     streetColor = (117, 96, 66)
-    waterColor = (48, 76, 94)
+    waterColor = (35, 54, 60)
     buildingColor = (40, 40, 40)
     farmColor = (156, 112, 17)
     vowels = ["a","e","i","o","u"]
@@ -199,6 +233,7 @@ class Tools:
     plotSecondCol = (0,240,0)
     mountainHeight = 0.84
     snowCapHeight = 0.92
+    oceanOpacity = 0.83
     baseStandardOfLiving = {"food":1,"work":1,"luxuries":1,"health":1,"freedoms":1}
     mundaneProfessions = ["roadbuilder"]
     technologies = {}
