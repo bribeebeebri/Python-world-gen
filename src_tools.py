@@ -225,6 +225,7 @@ class Tools:
     waterColor = (35, 54, 60)
     buildingColor = (40, 40, 40)
     farmColor = (156, 112, 17)
+    markedNodeColor = (1,254,254)
     vowels = ["a","e","i","o","u"]
     plotXDim = 600
     plotYDim = 400
@@ -328,7 +329,7 @@ def skillTier(skill):
 
 def synonym(x,seed=0,exclusive=0):
     s = {}
-    s["mountains"] = ["mountains","peaks","ridges","highlands"]
+    s["mountains"] = ["mountains","peaks","ridges","highlands","mountain range"]
     s["savanna"] = ["savanna","plain","prairie","fields"]
     s["shrubland"] = ["shrubland","badlands","bushland"]
     s["forest"] = ["forest","woods","wood","woodland"]
@@ -445,6 +446,7 @@ def synonym(x,seed=0,exclusive=0):
     s["peak"] = ["peak","mountain","summit","ridge","cliff","massif"]
     s["hill"] = ["hill","bluff","cliff","ridge","knoll","hillock"]
     s["pond"] = ["pond","lake","reservoir","lagoon"]
+    s["valley"] = ["valley","gorge","canyon","basin","lowlands"]
     s["governor"] = ["governor","mayor","overseer","chancellor","councilman","administrator","commissioner"]
     syn = x
     if x in s.keys():

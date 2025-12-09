@@ -135,7 +135,8 @@ class Magic:
                  "resurrect":["necromantic","soul","light","blessed","corpse","grave"],
                  "burn":["fire","brimstone","searing","combustion","inferno"],
                  "freeze":["ice","cold","arctic","biting","frost"],
-                 "poison":["poison","toxic","noxious","caustic"]}
+                 "poison":["poison","toxic","noxious","caustic"],
+                 "scry":["clairvoyant","lucid","farseeing","optical"]}
         suffixes = {"curse":["doom","curse","hate","hex","spite"],
                  "bless":["blessing","sanctity","beatitude","consecration","purification"],
                  "destroy":["death","fire","inferno","mortality","horror","finality","nightmare","doom","destruction"],
@@ -147,13 +148,14 @@ class Magic:
                  "resurrect":["necromancy","revival","resurrection","unearthing","resuscitation","light"],
                  "burn":["torch","inferno","fire","brimstone","blast","pyre"],
                  "freeze":["chill","frost","icicle","blizzard","bite"],
-                 "poison":["toxin","poison","infection","decay","miasma"]}
+                 "poison":["toxin","poison","infection","decay","miasma"],
+                 "scry":["farseeing","divination","clairvoyance","vision","eye","sight","oracle"]}
         # Choose a type of magic spell. This is (mostly?) cosmetic.
         kinds = ["incantation","meditation","spell","prayer","invocation","channeling","concoction","ritual","song","divination","sorcery"]
         naturalKinds = ["breath","song","roar","excretion","stare","bite"]
         # Choose one effect to do to the target; greater magnitudes are harder and less likely to be cast and generated
-        effects = {"curse":-1.25,"bless":1,"destroy":-2.5,"create":3,"transmute":-0.6,"transport":-0.6,
-                   "harm":-1.5,"heal":1,"resurrect":3,"burn":-1,"freeze":-1,"poison":-1.25}
+        effects = {"curse":-1.25,"bless":1,"destroy":-2.5,"create":3,"transmute":-0.8,"transport":-0.6,
+                   "harm":-1.5,"heal":1,"resurrect":3,"burn":-1,"freeze":-1,"poison":-1.25,"scry":-0.2}
         # Choose a target. Greater magnitudes are harder/less likely to be cast and generated
         targets = {"item":2,"person":3,"group":4,"bloodline":5,"location":6,"city":9,"region":15,"nation":26}
         naturalTargets = ["person","group","bloodline","location","city"]

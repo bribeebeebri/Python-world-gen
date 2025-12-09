@@ -100,6 +100,7 @@ class Node:
         self.resourceRegion = None
         self.resourceDist = 0
         self.key = 0
+        self.marked = 0
         self.tributaries = {}
         self.linkedRoads = []
         self.roads = []
@@ -111,6 +112,8 @@ class Node:
         self.lakeName = ""
         self.peak = 0
         self.peakName = ""
+        self.valley = None
+        self.valleyName = ""
         self.structureName = ""
         self.savedStructure = None
         self.tempDistance = 100000
@@ -290,6 +293,10 @@ class Node:
                 ne = pe
                 n = p
         return n
+    def isOceanicNode(self):
+        if self.region != None and self.region.biome in ["sea","ocean"]:
+            return True
+        return False
     def getTributaryDescendant(self):
         if self.tributaryDescendant != None:
             return self.tributaryDescendant
@@ -317,6 +324,14 @@ class Node:
                 chosenNode = n
                 chosenSteepness = steepness
         return chosenNode
+    def getLowestOfDryNeighbors(self):
+        if self.neighbors == []:
+            return self
+        dryNeighbors = [k for k in self.neighbors if k.bodyWater == None]
+        if len(dryNeighbors) == 0:
+            return self
+        lowestOfNeighbors = min(dryNeighbors,key=lambda x:x.elevation)
+        return lowestOfNeighbors
     def getLowestOfNeighbors(self):
         if self.neighbors == []:
             return self
@@ -608,6 +623,20 @@ class Node:
         if n.river != None:
             if self.culture.name not in n.river.culturalNames:
                 n.river.culturalNames[self.culture.name] = self.culture.language.genName()
+        if n.valley != None and n.valleyName == "":
+            valleyRootNode = n.valley
+            if valleyRootNode.valleyName != "":
+                n.valleyName = valleyRootNode.valleyName
+            else:
+                roll = random.random()
+                valleyName = self.culture.language.genName() + " Valley"
+                if roll < 0.6:
+                    valleyName = self.culture.language.genName() + " " + string.capwords(synonym("valley"))
+                elif roll < 0.3:
+                    valleyName = "Valley of " + self.culture.language.genName()
+                nodesToName = [k for k in self.myMap.atlas if k.valley == valleyRootNode]
+                for p in nodesToName:
+                    p.valleyName = valleyName
         if n.lake > 0 and n.lakeName == "":
             if random.random() < 0.4:
                 n.lakeName = "Lake " + self.culture.language.genName()
@@ -700,6 +729,8 @@ class Node:
             return self.peakName
         if self.lakeName != "":
             return self.lakeName
+        if self.valleyName != "":
+            return self.valleyName
         if self.river != None:
             if self.river.culturalNames == {} or self.culture == None:
                 return "unnamed river"
@@ -719,6 +750,8 @@ class Node:
             s = self.peakName
         elif self.lakeName != "":
             s = self.lakeName
+        elif self.valleyName != "":
+            s = self.valleyName
         elif self.river != None:
             if self.river.culturalNames == {} or self.culture == None:
                 s = "an unnamed river"
@@ -764,10 +797,16 @@ class Node:
             for n in self.neighbors:
                 if n.landmass == self.landmass and n.bodyWater == None and self.bodyWater == None and n.hasWaterNeighbor() == 1:
                     drawer.line([self.coords(),n.coords()],dCol,2)
+        if self.peak > 1:
+            self.drawPeak(drawer,self.x,self.y,"black")
+        if self.marked > 0:
+            self.drawPoint(drawer,self.marked,Tools.markedNodeColor)
     def drawRoads(self,drawer,roadCol):
         for n in self.neighbors:
             if n in self.roads:
                 drawer.line([self.coords(),n.coords()],roadCol,1)
+    def drawPeak(self,drawer,xx,yy,dCol):
+        drawer.polygon([(xx+2,yy+1),(xx-2,yy+1),(xx,yy-1)],fill=dCol)
     def drawFort(self,drawer,xx,yy,dCol,out):
         p1 = (xx-2,yy+2)
         p2 = (xx,yy+4)
@@ -905,6 +944,9 @@ class Triangle:
         dCol = (avgR,avgG,avgB)
         if underwater == 1:
             dCol = interpolate2colors(waterColorAtElevation(elevation),dCol,Tools.oceanOpacity)
+        markedCount = len([n for n in self.verts if n.marked > 0])
+        if markedCount >= 2:
+            dCol = Tools.markedNodeColor
         drawer.polygon([self.verts[0].coords(),self.verts[1].coords(),self.verts[2].coords()],fill=dCol,outline=dCol)
 
 class River:
@@ -6472,6 +6514,8 @@ class Map:
             info += n.peakName + "\n"
         if n.lakeName != "":
             info += n.lakeName + "\n"
+        if n.valleyName != "":
+            info += n.valleyName + "\n"    
         if n.structureName != "":
             info += n.structureName + "\n"
         if pops != 0:
@@ -6858,14 +6902,38 @@ class Map:
             if p.biome == "mountains" and p.elevation > Tools.snowCapHeight*random.uniform(1,1.02) and p.temp < 0.6:
                 biomeColor = self.biomeColors["frost"]
             p.setBiomeColor(biomeColor)
-            highestNeighbor = max([n.elevation for n in p.neighbors])
-            if p.elevation > highestNeighbor:
+            highestNeighborElev = max([n.elevation for n in p.neighbors])
+            dryNeighbors = [k for k in p.neighbors if k.bodyWater == None]
+            lowerNeighbors = [k for k in p.neighbors if k.elevation < p.elevation]
+            if p.elevation > highestNeighborElev:
                 if p.elevation > Tools.snowCapHeight:
                     p.peak = 3
                 elif p.elevation > Tools.mountainHeight*random.uniform(0.88,0.99):
                     p.peak = 2
                 else:
                     p.peak = 1
+            if p.bodyWater != None:
+                p.peak = 0
+            if len(dryNeighbors) > 1 and len(lowerNeighbors) <= 1 and p.bodyWater == None:
+                p.valley = p
+        valleyLength = 1
+        while valleyLength < 2:
+            for p in [n for n in self.atlas if n.valley != None]:
+                for k in [m for m in p.neighbors if m.bodyWater == None]:
+                    lowestNeighbor = k.getLowestOfNeighbors()
+                    if lowestNeighbor == p:
+                        k.valley = p.valley
+            valleyLength += 1
+        for p in [n for n in self.atlas if n.valley != None]:
+            for k in p.neighbors:
+                if k.isOceanicNode():
+                    p.valley = None
+        for p in self.atlas:
+            if p.valley != None:
+                for k in p.neighbors:
+                    if k.valley != None and k.valley != p.valley:
+                        for n in [m for m in self.atlas if m.valley == k.valley]:
+                            n.valley = p.valley
         self.vegetation()
         for p in self.atlas:
             p.metallicity *= self.biomeScales[p.biome]["metallicity"]
@@ -7424,14 +7492,66 @@ class Map:
             self.displayNo = self.townGen.nearestNeighborNode(clickedPosX,clickedPosY)
             self.cityInfo()
             self.redraw()
+    def unmarkAll(self):
+        for p in self.atlas:
+            p.marked = 0
+    def markOnePeak(self,rootNode):
+        self.unmarkAll()
+        if rootNode.peak > 0:
+            rootNode.marked += 2*rootNode.peak
+    def markAllPeaks(self):
+        self.unmarkAll()
+        for p in self.atlas:
+            if p.peak > 0:
+                p.marked += 2*p.peak
+    def markOneValley(self,rootNode):
+        self.unmarkAll()
+        if rootNode.valley == None:
+            return
+        for p in self.atlas:
+            if p.valley == rootNode.valley:
+                p.marked += 2
+    def markAllValleys(self):
+        self.unmarkAll()
+        for p in self.atlas:
+            if p.valley != None:
+                p.marked += 2
+    def markAllStructures(self):
+        self.unmarkAll()
+        for p in self.atlas:
+            if p.getStructure() != None:
+                p.marked += 2
+    def markSameStructures(self,rootNode):
+        self.unmarkAll()
+        rootStructure = rootNode.getStructure()
+        for p in self.atlas:
+            if p.getStructure() == rootStructure:
+                p.marked += 3
     def displayNode(self,event):
         clickedNode = self.nearestNode(event.x-2,event.y-2)
+        reclicked = False
+        if clickedNode == self.displayNo:
+            reclicked = True
         if len(clickedNode.entities) == 0 and clickedNode.city == None and clickedNode.getStructure() == None:
             for n in clickedNode.neighbors:
                 if len(n.entities) > 0:
                     clickedNode = n
                 elif n.city != None:
                     clickedNode = n
+        if clickedNode.peak > 0:
+            self.markOnePeak(clickedNode)
+            if reclicked == True:
+                self.markAllPeaks()
+        elif clickedNode.getStructure() != None:
+            self.markSameStructures(clickedNode)
+            if reclicked == True:
+                self.markAllStructures()
+        elif clickedNode.valley != None:
+            self.markOneValley(clickedNode)
+            if reclicked == True:
+                self.markAllValleys()
+        else:
+            self.unmarkAll()
         self.displayString.set(self.nodeInfo(clickedNode))
         self.displayNo = clickedNode
         self.redraw()
